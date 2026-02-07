@@ -5,9 +5,7 @@
   "buildCommand": "cd app && npm run build",
   "outputDirectory": "app/dist",
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
