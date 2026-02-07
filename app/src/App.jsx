@@ -13,6 +13,14 @@ const CATEGORIES = [
   ['special', 'Specials'],
 ]
 
+const TABS = [
+  ['home', 'Home'],
+  ['search', 'Search'],
+  ['watchlist', 'Watchlist'],
+  ['continue', 'Continue'],
+  ['history', 'History'],
+]
+
 const api = async (path, options = {}) => {
   const token = localStorage.getItem('token')
   const response = await fetch(path, {
@@ -109,22 +117,33 @@ function App() {
 
   return (
     <div className="layout">
-      <header>
-        <h1>AnimeCodex Stream</h1>
-        <nav>
-          {['home', 'search', 'watchlist', 'continue', 'history'].map((item) => (
-            <button key={item} onClick={() => setTab(item)}>{item}</button>
+      <header className="topbar">
+        <div className="brand">
+          <p className="eyebrow">Anime Streaming Dashboard</p>
+          <h1>AnimeCodex Stream</h1>
+        </div>
+        <nav className="nav-tabs">
+          {TABS.map(([key, label]) => (
+            <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{label}</button>
           ))}
         </nav>
-        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme}</button>
+        <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀️ Light' : '🌙 Dark'}</button>
       </header>
 
+      <section className="card hero-card">
+        <p className="status-pill">Demo mode</p>
+        <h2>UI mockup for product direction</h2>
+        <p>This build is a visual demo and does not include realtime data sync yet. Use it to validate layout and navigation flow before wiring live sources.</p>
+      </section>
+
       {!user && (
-        <section className="card">
+        <section className="card auth-card">
           <h3>Login / Signup</h3>
-          <input placeholder="Name" onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} />
-          <input placeholder="Email" onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} />
-          <input placeholder="Password" type="password" onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} />
+          <div className="auth-grid">
+            <input placeholder="Name" onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} />
+            <input placeholder="Email" onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} />
+            <input placeholder="Password" type="password" onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} />
+          </div>
           <div className="row">
             <button onClick={() => runAuth('login')}>Login</button>
             <button onClick={() => runAuth('signup')}>Signup</button>
@@ -136,9 +155,9 @@ function App() {
         <>
           <section className="card">
             <h2>Discovery</h2>
-            <div className="row wrap">
+            <div className="row wrap chips">
               {CATEGORIES.map(([key, label]) => (
-                <button key={key} onClick={() => setCategory(key)}>{label}</button>
+                <button key={key} className={category === key ? 'active' : ''} onClick={() => setCategory(key)}>{label}</button>
               ))}
             </div>
             <div className="grid">{discover.map((anime) => <AnimeCard key={anime.id || anime.dataId} anime={anime} onClick={() => openAnime(anime)} />)}</div>
@@ -187,21 +206,33 @@ function App() {
       {tab === 'watchlist' && (
         <section className="card">
           <h2>Watchlist</h2>
-          <div className="grid">{userData.watchlist.map((anime) => <AnimeCard key={anime.id} anime={anime} onClick={() => openAnime(anime)} />)}</div>
+          {userData.watchlist.length ? (
+            <div className="grid">{userData.watchlist.map((anime) => <AnimeCard key={anime.id} anime={anime} onClick={() => openAnime(anime)} />)}</div>
+          ) : (
+            <p className="empty">No items in watchlist yet.</p>
+          )}
         </section>
       )}
 
       {tab === 'continue' && (
         <section className="card">
           <h2>Continue Watching</h2>
-          <ul>{Object.values(userData.progress).map((item, i) => <li key={i}>{item.animeTitle} — Episode {item.episodeNumber}</li>)}</ul>
+          {Object.values(userData.progress).length ? (
+            <ul>{Object.values(userData.progress).map((item, i) => <li key={i}>{item.animeTitle} — Episode {item.episodeNumber}</li>)}</ul>
+          ) : (
+            <p className="empty">Start watching any episode to track progress.</p>
+          )}
         </section>
       )}
 
       {tab === 'history' && (
         <section className="card">
           <h2>History</h2>
-          <ul>{userData.history.map((item, i) => <li key={i}>{item.animeTitle} EP {item.episodeNumber} ({new Date(item.watchedAt).toLocaleString()})</li>)}</ul>
+          {userData.history.length ? (
+            <ul>{userData.history.map((item, i) => <li key={i}>{item.animeTitle} EP {item.episodeNumber} ({new Date(item.watchedAt).toLocaleString()})</li>)}</ul>
+          ) : (
+            <p className="empty">No watch history available yet.</p>
+          )}
         </section>
       )}
     </div>
