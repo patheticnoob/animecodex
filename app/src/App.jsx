@@ -2,237 +2,231 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const CATEGORIES = [
-  ['most-popular', 'Most Popular'],
-  ['top-airing', 'Top Airing'],
-  ['tv', 'TV Shows'],
-  ['movies', 'Movies'],
-  ['subbed', 'Subbed'],
-  ['dubbed', 'Dubbed'],
-  ['ona', 'ONA'],
-  ['ova', 'OVA'],
-  ['special', 'Specials'],
+  ['most-popular', 'All Moods'],
+  ['top-airing', 'Cozy Vibes'],
+  ['movies', 'Adventure'],
+  ['tv', 'Romance'],
+  ['dubbed', 'Comedy'],
+  ['special', 'Fantasy'],
 ]
 
-const TABS = [
+const NAV_ITEMS = [
   ['home', 'Home'],
+  ['browse', 'Browse'],
   ['search', 'Search'],
-  ['watchlist', 'Watchlist'],
-  ['continue', 'Continue'],
-  ['history', 'History'],
+]
+
+const FALLBACK_ANIME = [
+  {
+    id: 'fallback-1',
+    name: 'Skyward Memories',
+    poster: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=900&q=80',
+    type: 'Featured',
+  },
+  {
+    id: 'fallback-2',
+    name: 'Rainy Days',
+    poster: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=600&q=80',
+    type: 'Movie',
+  },
+  {
+    id: 'fallback-3',
+    name: 'Magical Colors',
+    poster: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=600&q=80',
+    type: 'Series',
+  },
 ]
 
 const api = async (path, options = {}) => {
-  const token = localStorage.getItem('token')
   const response = await fetch(path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
   })
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`)
+  }
+
   return response.json()
 }
 
 function App() {
   const [tab, setTab] = useState('home')
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark')
   const [category, setCategory] = useState('most-popular')
-  const [discover, setDiscover] = useState([])
+  const [discover, setDiscover] = useState(FALLBACK_ANIME)
   const [query, setQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
-  const [selectedAnime, setSelectedAnime] = useState(null)
+  const [selectedAnime, setSelectedAnime] = useState(FALLBACK_ANIME[0])
   const [episodes, setEpisodes] = useState([])
   const [playerUrl, setPlayerUrl] = useState('')
-  const [user, setUser] = useState(null)
-  const [authForm, setAuthForm] = useState({ email: '', password: '', name: '' })
-  const [userData, setUserData] = useState({ watchlist: [], progress: {}, history: [] })
+  const [statusMessage, setStatusMessage] = useState('')
 
   useEffect(() => {
-    document.body.dataset.theme = theme
-    localStorage.setItem('theme', theme)
-  }, [theme])
+    const run = async () => {
+      try {
+        const d = await api(`/api/discovery?category=${category}`)
+        const animes = d.data?.data?.animes || d.data?.animes || []
+        if (animes.length) {
+          setDiscover(animes)
+          if (!selectedAnime || selectedAnime.id?.startsWith('fallback')) {
+            setSelectedAnime(animes[0])
+          }
+        }
+        setStatusMessage('')
+      } catch {
+        setStatusMessage('Using fallback library while API is warming up.')
+      }
+    }
 
-  useEffect(() => {
-    api(`/api/discovery?category=${category}`).then((d) => setDiscover(d.data?.data?.animes || d.data?.animes || []))
+    run()
   }, [category])
 
-  useEffect(() => {
-    api('/api/me').then((d) => {
-      if (d.user) {
-        setUser(d.user)
-        refreshUserData()
-      }
-    })
-  }, [])
-
-  const recommendations = useMemo(() => {
-    if (!userData.history.length) return discover.slice(0, 8)
-    return [...discover].sort(() => Math.random() - 0.5).slice(0, 8)
-  }, [discover, userData.history])
-
-  const refreshUserData = () => api('/api/user-data').then((d) => d.watchlist && setUserData(d))
-
-  const runAuth = async (action) => {
-    const data = await api('/api/auth', { method: 'POST', body: JSON.stringify({ ...authForm, action }) })
-    if (data.token) {
-      localStorage.setItem('token', data.token)
-      setUser(data.user)
-      setTab('home')
-      refreshUserData()
-    }
-  }
+  const continueSketches = useMemo(() => discover.slice(0, 3), [discover])
+  const popular = useMemo(() => discover.slice(0, 5), [discover])
 
   const openAnime = async (anime) => {
     setSelectedAnime(anime)
-    setTab('details')
-    const id = anime.dataId || anime.id
-    const epData = await api(`/api/anime/${id}/episodes`)
-    setEpisodes(epData.data?.episodes || epData.episodes || [])
-  }
-
-  const playEpisode = async (anime, number) => {
-    const id = anime.dataId || anime.id
-    const data = await api(`/api/anime/${id}/episode/${number}`)
-    const source = data.source?.data?.sources?.[0]?.url || data.source?.sources?.[0]?.url || ''
-    setPlayerUrl(source)
-    setTab('watch')
-    if (user) {
-      await api('/api/user-data', {
-        method: 'PUT',
-        body: JSON.stringify({ type: 'progress.save', payload: { animeId: id, animeTitle: anime.name, episodeNumber: number, timestamp: 0 } }),
-      })
-      refreshUserData()
+    setTab('browse')
+    setPlayerUrl('')
+    try {
+      const id = anime.dataId || anime.id
+      const epData = await api(`/api/anime/${id}/episodes`)
+      const items = epData.data?.episodes || epData.episodes || []
+      setEpisodes(items)
+    } catch {
+      setEpisodes([])
+      setStatusMessage('Episodes are unavailable for this title right now.')
     }
   }
 
-  const addWatchlist = async () => {
-    if (!user || !selectedAnime) return
-    await api('/api/user-data', {
-      method: 'PUT',
-      body: JSON.stringify({ type: 'watchlist.add', payload: { id: selectedAnime.dataId || selectedAnime.id, name: selectedAnime.name, poster: selectedAnime.poster } }),
-    })
-    refreshUserData()
+  const playEpisode = async (anime, number) => {
+    try {
+      const id = anime.dataId || anime.id
+      const data = await api(`/api/anime/${id}/episode/${number}`)
+      const source = data.source?.data?.sources?.[0]?.url || data.source?.sources?.[0]?.url || ''
+      setPlayerUrl(source)
+      setTab('browse')
+      if (!source) {
+        setStatusMessage('No stream source returned for that episode.')
+      } else {
+        setStatusMessage('')
+      }
+    } catch {
+      setStatusMessage('Could not load stream source. Try another episode.')
+    }
+  }
+
+  const runSearch = async () => {
+    if (!query.trim()) return
+    try {
+      const d = await api(`/api/search?q=${encodeURIComponent(query)}`)
+      setSearchResults(d.data?.animes || d.data?.data?.animes || [])
+      setStatusMessage('')
+    } catch {
+      setSearchResults([])
+      setStatusMessage('Search is temporarily unavailable.')
+    }
   }
 
   return (
     <div className="layout">
       <header className="topbar">
         <div className="brand">
-          <p className="eyebrow">Anime Streaming Dashboard</p>
-          <h1>AnimeCodex Stream</h1>
+          <div className="brand-dot">✦</div>
+          <h1>AniCozy</h1>
         </div>
+
         <nav className="nav-tabs">
-          {TABS.map(([key, label]) => (
-            <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{label}</button>
+          {NAV_ITEMS.map(([key, label]) => (
+            <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
+              {label}
+            </button>
           ))}
         </nav>
-        <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀️ Light' : '🌙 Dark'}</button>
       </header>
 
-      <section className="card hero-card">
-        <p className="status-pill">Demo mode</p>
-        <h2>UI mockup for product direction</h2>
-        <p>This build is a visual demo and does not include realtime data sync yet. Use it to validate layout and navigation flow before wiring live sources.</p>
+      {statusMessage && <p className="status-message">{statusMessage}</p>}
+
+      <section className="hero-card">
+        <img src={(selectedAnime?.poster || selectedAnime?.image || FALLBACK_ANIME[0].poster)} alt={selectedAnime?.name || 'Featured'} />
+        <div className="hero-content">
+          <p className="badge">Featured Series</p>
+          <h2>{selectedAnime?.name || 'Skyward Memories'}</h2>
+          <p>Join a relaxing anime journey and start streaming instantly — no account required.</p>
+          <button onClick={() => openAnime(selectedAnime || FALLBACK_ANIME[0])}>Watch Episodes</button>
+        </div>
       </section>
 
-      {!user && (
-        <section className="card auth-card">
-          <h3>Login / Signup</h3>
-          <div className="auth-grid">
-            <input placeholder="Name" onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} />
-            <input placeholder="Email" onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} />
-            <input placeholder="Password" type="password" onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} />
-          </div>
-          <div className="row">
-            <button onClick={() => runAuth('login')}>Login</button>
-            <button onClick={() => runAuth('signup')}>Signup</button>
-          </div>
-        </section>
-      )}
+      <section className="section-block">
+        <h3>Pick your mood</h3>
+        <div className="chips">
+          {CATEGORIES.map(([key, label]) => (
+            <button key={key} className={category === key ? 'active' : ''} onClick={() => setCategory(key)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </section>
 
-      {tab === 'home' && (
+      {(tab === 'home' || tab === 'browse') && (
         <>
-          <section className="card">
-            <h2>Discovery</h2>
-            <div className="row wrap chips">
-              {CATEGORIES.map(([key, label]) => (
-                <button key={key} className={category === key ? 'active' : ''} onClick={() => setCategory(key)}>{label}</button>
+          <section className="section-block">
+            <h3>Continue Sketches</h3>
+            <div className="grid">
+              {continueSketches.map((anime) => (
+                <AnimeCard key={anime.id || anime.dataId} anime={anime} onClick={() => openAnime(anime)} />
               ))}
             </div>
-            <div className="grid">{discover.map((anime) => <AnimeCard key={anime.id || anime.dataId} anime={anime} onClick={() => openAnime(anime)} />)}</div>
           </section>
-          <section className="card">
-            <h2>Recommendations</h2>
-            <div className="grid">{recommendations.map((anime) => <AnimeCard key={anime.id || anime.dataId} anime={anime} onClick={() => openAnime(anime)} />)}</div>
+
+          <section className="section-block">
+            <h3>Now Streaming</h3>
+            {episodes.length > 0 ? (
+              <div className="episodes">
+                {episodes.map((ep) => (
+                  <button key={ep.number} onClick={() => playEpisode(selectedAnime, ep.number)}>
+                    Episode {ep.number}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">Pick a title to load episodes.</p>
+            )}
+            {playerUrl && <video src={playerUrl} controls autoPlay className="player" />}
+          </section>
+
+          <section className="section-block">
+            <h3>Popular in Journal</h3>
+            <div className="grid">
+              {popular.map((anime) => (
+                <AnimeCard key={`popular-${anime.id || anime.dataId}`} anime={anime} onClick={() => openAnime(anime)} />
+              ))}
+            </div>
           </section>
         </>
       )}
 
       {tab === 'search' && (
-        <section className="card">
-          <h2>Search</h2>
-          <div className="row">
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search anime" />
-            <button onClick={() => api(`/api/search?q=${encodeURIComponent(query)}`).then((d) => setSearchResults(d.data?.animes || d.data?.data?.animes || []))}>Find</button>
+        <section className="section-block">
+          <h3>Search anime</h3>
+          <div className="search-row">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find your cozy anime..."
+              onKeyDown={(e) => e.key === 'Enter' && runSearch()}
+            />
+            <button onClick={runSearch}>Search</button>
           </div>
-          <div className="grid">{searchResults.map((anime) => <AnimeCard key={anime.id || anime.dataId} anime={anime} onClick={() => openAnime(anime)} />)}</div>
-        </section>
-      )}
 
-      {tab === 'details' && selectedAnime && (
-        <section className="card">
-          <h2>{selectedAnime.name}</h2>
-          <img src={selectedAnime.poster} alt={selectedAnime.name} className="poster" />
-          <button onClick={addWatchlist}>Add to Watchlist</button>
-          <h3>Episodes</h3>
-          <div className="row wrap">
-            {episodes.map((ep) => (
-              <button key={ep.number} onClick={() => playEpisode(selectedAnime, ep.number)}>
-                EP {ep.number} {userData.progress[`${selectedAnime.dataId || selectedAnime.id}::${ep.number}`] ? '✓' : ''}
-              </button>
+          <div className="grid">
+            {searchResults.map((anime) => (
+              <AnimeCard key={anime.id || anime.dataId} anime={anime} onClick={() => openAnime(anime)} />
             ))}
           </div>
-        </section>
-      )}
-
-      {tab === 'watch' && (
-        <section className="card">
-          <h2>Player</h2>
-          {playerUrl ? <video src={playerUrl} controls autoPlay className="player" /> : <p>Pick an episode first.</p>}
-        </section>
-      )}
-
-      {tab === 'watchlist' && (
-        <section className="card">
-          <h2>Watchlist</h2>
-          {userData.watchlist.length ? (
-            <div className="grid">{userData.watchlist.map((anime) => <AnimeCard key={anime.id} anime={anime} onClick={() => openAnime(anime)} />)}</div>
-          ) : (
-            <p className="empty">No items in watchlist yet.</p>
-          )}
-        </section>
-      )}
-
-      {tab === 'continue' && (
-        <section className="card">
-          <h2>Continue Watching</h2>
-          {Object.values(userData.progress).length ? (
-            <ul>{Object.values(userData.progress).map((item, i) => <li key={i}>{item.animeTitle} — Episode {item.episodeNumber}</li>)}</ul>
-          ) : (
-            <p className="empty">Start watching any episode to track progress.</p>
-          )}
-        </section>
-      )}
-
-      {tab === 'history' && (
-        <section className="card">
-          <h2>History</h2>
-          {userData.history.length ? (
-            <ul>{userData.history.map((item, i) => <li key={i}>{item.animeTitle} EP {item.episodeNumber} ({new Date(item.watchedAt).toLocaleString()})</li>)}</ul>
-          ) : (
-            <p className="empty">No watch history available yet.</p>
-          )}
         </section>
       )}
     </div>
@@ -244,7 +238,7 @@ function AnimeCard({ anime, onClick }) {
     <article className="anime" onClick={onClick}>
       <img src={anime.poster || anime.image} alt={anime.name || anime.title} />
       <h4>{anime.name || anime.title}</h4>
-      <p>{anime.type} • {anime.episodes?.sub || anime.language || 'N/A'}</p>
+      <p>{anime.type || 'Series'}</p>
     </article>
   )
 }
