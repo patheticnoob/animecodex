@@ -1,7 +1,4 @@
-const cache = new Map();
 const rate = new Map();
-
-const API_BASE = process.env.HIANIME_API_BASE || 'https://hianime-api-6z7m.onrender.com';
 
 function send(res, status, data) {
   res.status(status).setHeader('Content-Type', 'application/json');
@@ -37,18 +34,4 @@ function enforceRateLimit(req, res, limit = 80) {
   return true;
 }
 
-async function hianimeRequest(path, ttlMs = 45_000) {
-  const key = `${path}`;
-  const item = cache.get(key);
-  if (item && item.expires > Date.now()) return item.value;
-
-  const response = await fetch(`${API_BASE}${path}`);
-  if (!response.ok) {
-    throw new Error(`Hianime upstream failed: ${response.status}`);
-  }
-  const json = await response.json();
-  cache.set(key, { value: json, expires: Date.now() + ttlMs });
-  return json;
-}
-
-module.exports = { send, parseBody, enforceRateLimit, hianimeRequest };
+module.exports = { send, parseBody, enforceRateLimit };
